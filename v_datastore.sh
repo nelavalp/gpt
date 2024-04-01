@@ -15,18 +15,12 @@ get_session_id() {
   echo "$session_id"
 }
 
-# Function to get datastore ID from its name
-get_datastore_id() {
-  local datastore_name="$1"
-  curl -s -k -X GET -H "vmware-api-session-id: ${session_id}" "https://${VCENTER_SERVER}/rest/vcenter/datastore" | jq -r '.value[] | select(.name == "'${datastore_name}'") | .datastore'
-}
-
-# Function to list VMs associated with a datastore and write to CSV
-list_vms_for_datastore() {
-  local datastore_id="$1"
+# Function to list VMs and write to CSV
+list_vms() {
+  local session_id="$1"
   local datastore_name="$2"
   local vm_info
-  vm_info=$(curl -s -k -X GET -H "vmware-api-session-id: ${session_id}" "https://${VCENTER_SERVER}/rest/vcenter/vm?filter.datastores=${datastore_id}" | jq -r '.value[] | [.name, .guest.ip_address, .power_state] | @csv')
+  vm_info=$(curl -s -k -X GET -H "vmware-api-session-id: ${session_id}" "https://${VCENTER_SERVER}/rest/vcenter/vm" | jq -r '.value[] | [.name, .power_state] | @csv')
   while IFS= read -r vm; do
     echo "${datastore_name},${vm}" >> "$OUTPUT_CSV"
   done <<< "$vm_info"
@@ -44,12 +38,11 @@ main() {
   fi
 
   # Create CSV file with header
-  echo "Datastore,VM Name,IP,Power State" > "$OUTPUT_CSV"
+  echo "Datastore,VM Name,Power State" > "$OUTPUT_CSV"
 
   # Read datastore names from a file
   while IFS= read -r datastore; do
-    datastore_id=$(get_datastore_id "$datastore")
-    list_vms_for_datastore "$datastore_id" "$datastore"
+    list_vms "$session_id" "$datastore"
   done < datastores.txt  # Change this to your file containing datastore names
 }
 
