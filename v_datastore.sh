@@ -5,14 +5,12 @@ VCENTER_SERVER="your-vcenter-server"
 USERNAME="your-username"
 PASSWORD="your-password"
 
-# Authenticate and obtain an authentication token
-auth_token=$(curl -s -k -X POST -H "Content-Type: application/json" -d '{"username":"'${USERNAME}'","password":"'${PASSWORD}'"}' "https://${VCENTER_SERVER}/rest/com/vmware/cis/session" | jq -r .value)
-
-# Check if authentication is successful
-if [ -z "$auth_token" ]; then
-  echo "Authentication failed. Check your credentials or vCenter Server details."
-  exit 1
-fi
+# Function to authenticate and obtain an authentication token
+authenticate() {
+  local auth_token
+  auth_token=$(curl -s -k -X POST -H "Content-Type: application/json" -d '{"username":"'${USERNAME}'","password":"'${PASSWORD}'"}' "https://${VCENTER_SERVER}/api/vcenter/authentication/token" | jq -r .access_token)
+  echo "$auth_token"
+}
 
 # Function to get datastore ID from its name
 get_datastore_id() {
@@ -33,24 +31,27 @@ list_all_vms() {
 
 # Main function to list VMs for each datastore and all VMs
 main() {
+  # Authenticate and obtain an authentication token
+  auth_token=$(authenticate)
+
+  # Check if authentication is successful
+  if [ -z "$auth_token" ]; then
+    echo "Authentication failed. Check your credentials or vCenter Server details."
+    exit 1
+  fi
+
   # Header for CSV
   echo "Datastore,VM Name,Power State,Guest OS,Guest IP"
 
-  # Get list of datastores
-  datastores=$(curl -s -k -X GET -H "Content-Type: application/json" -H "vmware-api-session-id: ${auth_token}" "https://${VCENTER_SERVER}/rest/vcenter/datastore" | jq -r '.value[].name')
-
-  # Loop through each datastore and list VMs
-  for datastore in $datastores; do
+  # Read datastore names from a text file
+  while IFS= read -r datastore; do
     datastore_id=$(get_datastore_id "$datastore")
     list_vms_for_datastore "$datastore_id" | sed "s/^/${datastore},/"
-  done
+  done < datastores.txt  # Change this to your text file containing datastore names
 
   # List all VMs
   list_all_vms
 }
 
-# Execute the main function
-main
-
-# Logout
-curl -s -k -X DELETE -H "Content-Type: application/json" -H "vmware-api-session-id: ${auth_token}" "https://${VCENTER_SERVER}/rest/com/vmware/cis/session"
+# Execute the main function and save CSV values to a file
+main > output.csv
