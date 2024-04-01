@@ -15,13 +15,12 @@ get_session_id() {
   echo "$session_id"
 }
 
-# Function to list VMs and append to CSV
+# Function to list VMs
 list_vms() {
   local session_id="$1"
   local datastore_name="$2"
-  local vms_info
-  vms_info=$(curl -s -k -X GET -H "vmware-api-session-id: ${session_id}" "https://${VCENTER_SERVER}/rest/vcenter/vm" | jq -r --arg datastore "$datastore_name" '.value[] | [$datastore, .name, .power_state] | @csv')
-  echo "$vms_info" >> "$OUTPUT_CSV"
+  curl -s -k -X GET -H "vmware-api-session-id: ${session_id}" "https://${VCENTER_SERVER}/rest/vcenter/vm" | \
+  jq -r --arg datastore "$datastore_name" '.value[] | [$datastore, .name, .power_state] | @csv'
 }
 
 # Main function to list VMs for each datastore and append to CSV
@@ -40,7 +39,7 @@ main() {
 
   # Read datastore names from a file
   while IFS= read -r datastore; do
-    list_vms "$session_id" "$datastore"
+    list_vms "$session_id" "$datastore" >> "$OUTPUT_CSV"
   done < datastores.txt  # Change this to your file containing datastore names
 }
 
